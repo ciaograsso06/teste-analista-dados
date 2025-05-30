@@ -87,9 +87,9 @@ Esta é uma aplicação web interativa construída com Streamlit para realizar a
 
 2.  **Execute a aplicação Streamlit através do terminal:**
     ```bash
-    streamlit run seu_arquivo.py
+    streamlit run app.py
     ```
-    (Substitua `seu_arquivo.py` pelo nome do arquivo onde você salvou o código Python).
+    (Substitua `app.py` pelo nome do arquivo onde você salvou o código Python).
 
 3.  **Acesse a aplicação no seu navegador**: Geralmente, o Streamlit abrirá automaticamente o endereço `http://localhost:8501`.
 
