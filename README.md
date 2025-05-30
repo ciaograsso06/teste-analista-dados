@@ -1,84 +1,116 @@
-# Teste Técnico - Análise de Dados: Vendas e Marketing
+# 📊 Dashboard de Análise de Vendas e Marketing
 
-## Visão Geral
+Esta é uma aplicação web interativa construída com Streamlit para realizar análises detalhadas de dados de vendas e marketing. A ferramenta permite o upload de um banco de dados SQLite e oferece visualizações dinâmicas, insights e a capacidade de gerar relatórios em PDF.
 
-Este repositório contém um teste técnico para avaliação de candidatos à vaga de Analista de Dados. O objetivo é verificar habilidades de manipulação de dados, criação e execução de consultas SQL, análise exploratória e interpretação dos resultados, utilizando uma base de dados multimodal de vendas e marketing.
+## ✨ Funcionalidades Principais
 
-## Banco de Dados
+* **Upload de Banco de Dados**: Carregue facilmente seu arquivo de banco de dados SQLite (`.db`, `.sqlite`, `.sqlite3`) contendo os dados de vendas e marketing.
+* **Visão Geral dos Dados**:
+    * Métricas chave: Total de Clientes, Total de Produtos, Total de Campanhas, Receita Total.
+    * Preview das tabelas de dados: Clientes, Produtos, Campanhas, Vendas, Interações.
+* **Análise de Vendas Detalhada**:
+    * **Vendas por Canal**: Visualize o total de vendas por canal de aquisição no último trimestre.
+    * **Top 5 Produtos**: Identifique os produtos mais vendidos por volume, incluindo valor total e margem de lucro.
+    * **Segmentação de Clientes**: Analise o ticket médio por segmento de cliente (B2B/B2C).
+    * **Análise de Sazonalidade**: Observe o padrão de vendas ao longo dos meses do ano.
+* **Análise de Marketing Abrangente**:
+    * **Eficiência das Campanhas**: Avalie a taxa de conversão versus o orçamento das campanhas, segmentado por canal de marketing.
+    * **Análise de Canais de Marketing**: Entenda o engajamento total por canal de marketing.
+* **Análise Integrada**:
+    * **Relação Temporal**: Acompanhe as vendas dos top 3 produtos ao longo do tempo.
+    * **Análise Regional**: Compare vendas versus interações de marketing por cidade.
+* **Consultas SQL Personalizadas**:
+    * Execute suas próprias consultas SQL diretamente na interface.
+    * Gere gráficos (barra, linha, dispersão) a partir dos resultados da consulta.
+* **Geração de Relatórios em PDF**:
+    * Crie um relatório resumido em PDF contendo as principais seções de análise.
 
-No repositório pode ser encontrado o arquivo `vendas_marketing.db` já populado com dados randômicos gerados conforme o formato do teste.
+## ⚙️ Pré-requisitos
 
-A base de dados foi construída em **SQLite**. e possui 5 tabelas inter-relacionadas:
+1.  **Python**: Versão 3.7 ou superior.
+2.  **Bibliotecas Python**:
+    * `streamlit`
+    * `pandas`
+    * `plotly`
+    * `reportlab`
+    * `numpy` (geralmente instalado como dependência do pandas)
+3.  **Banco de Dados SQLite**: Um arquivo `vendas_marketing.db` (ou similar) com a seguinte estrutura de tabelas e colunas:
+    * **Clientes**:
+        * `id_cliente` (Chave Primária)
+        * `nome`
+        * `segmento` (Ex: 'B2B', 'B2C')
+        * `cidade`
+    * **Campanhas_Marketing**:
+        * `id_campanha` (Chave Primária)
+        * `nome_campanha`
+        * `canal_marketing`
+        * `data_inicio` (Formato: YYYY-MM-DD HH:MM:SS ou similar)
+        * `data_fim` (Formato: YYYY-MM-DD HH:MM:SS ou similar)
+        * `orcamento`
+        * `custo`
+    * **Interacoes_Marketing**:
+        * `id_interacao` (Chave Primária)
+        * `id_cliente` (Chave Estrangeira para Clientes)
+        * `id_campanha` (Chave Estrangeira para Campanhas_Marketing)
+        * `data_interacao` (Formato: YYYY-MM-DD HH:MM:SS ou similar)
+        * `tipo_interacao` (Ex: 'Clique', 'Visualização', 'Conversão')
+    * **Produtos**:
+        * `id_produto` (Chave Primária)
+        * `nome_produto`
+        * `categoria`
+        * `preco_unitario`
+        * `custo_unitario`
+    * **Vendas**:
+        * `id_venda` (Chave Primária)
+        * `id_cliente` (Chave Estrangeira para Clientes)
+        * `id_produto` (Chave Estrangeira para Produtos)
+        * `id_campanha` (Chave Estrangeira para Campanhas_Marketing, pode ser nulo)
+        * `data_venda` (Formato: YYYY-MM-DD HH:MM:SS ou similar)
+        * `quantidade`
+        * `valor_total`
+        * `canal_aquisicao` (Ex: 'Online', 'Loja Física')
 
-- **Clientes**: Informações sobre os clientes, como nome, segmento (B2B ou B2C) e cidade.
-- **Campanhas_Marketing**: Informações sobre as campanhas de marketing realizadas.
-- **Interacoes_Marketing**: Registros de interações dos clientes com as campanhas.
-- **Produtos**: Dados dos produtos disponíveis para venda.
-- **Vendas**: Registros de transações de vendas.
+## 🚀 Instalação
 
-## Tarefas do Teste Técnico
+1.  **Clone o repositório (se aplicável) ou salve o código Python em um arquivo (ex: `app.py`).**
 
-O candidato deverá desenvolver análises a partir desta base, abordando os seguintes pontos:
+2.  **Navegue até o diretório do projeto pelo terminal.**
 
-### A. Análise de Vendas
+3.  **Instale as dependências necessárias:**
+    ```bash
+    pip install streamlit pandas plotly reportlab
+    ```
 
-1. **Total de Vendas por Canal:**  
-   Calcule o valor total de vendas por canal de aquisição (Outbound vs Inbound) em um período específico (por exemplo, no último trimestre).
+## 🛠️ Como Usar
 
-2. **Top Produtos:**  
-   Identifique os 5 produtos com maior volume de vendas e calcule a margem de lucro média para esses produtos.
+1.  **Prepare seu arquivo de banco de dados SQLite** (`vendas_marketing.db`) com a estrutura de tabelas e colunas descrita em "Pré-requisitos".
 
-3. **Segmentação de Clientes:**  
-   Compare o ticket médio entre os clientes dos segmentos B2B e B2C.
+2.  **Execute a aplicação Streamlit através do terminal:**
+    ```bash
+    streamlit run seu_arquivo.py
+    ```
+    (Substitua `seu_arquivo.py` pelo nome do arquivo onde você salvou o código Python).
 
-4. **Sazonalidade:**  
-   Analise o padrão de vendas ao longo do ano, identificando picos e quedas, e proponha possíveis explicações baseadas no comportamento de compra.
+3.  **Acesse a aplicação no seu navegador**: Geralmente, o Streamlit abrirá automaticamente o endereço `http://localhost:8501`.
 
-### B. Análise de Marketing
+4.  **Carregue o Banco de Dados**:
+    * Na barra lateral esquerda, clique em "Selecione o arquivo vendas\_marketing.db".
+    * Faça o upload do seu arquivo `.db`.
 
-5. **Eficiência das Campanhas:**  
-   Determine quais campanhas tiveram maior taxa de conversão, relacionando o número de interações do tipo "Conversão" com o orçamento e custo das campanhas.
+5.  **Navegue pelas Análises**:
+    * Utilize o menu suspenso na barra lateral ("Selecione uma seção:") para escolher a análise desejada:
+        * 📋 Visão Geral
+        * 💰 A. Análise de Vendas
+        * 📈 B. Análise de Marketing
+        * 🔄 C. Análise Integrada
+        * 🎯 D. Análises Adicionais (para consultas SQL)
+        * 📄 Gerar Relatório PDF
 
-6. **Canais de Marketing:**  
-   Analise qual canal de marketing (Email, Google Ads, Meta Ads, etc.) gera maior engajamento dos clientes, baseado nas interações registradas.
+6.  **Interaja com os Gráficos**:
+    * Passe o mouse sobre os gráficos para ver detalhes.
+    * Utilize as ferramentas do Plotly (zoom, pan, download de imagem) disponíveis nos gráficos.
 
-### C. Análise Integrada (Vendas e Marketing)
-
-7. **Relação Temporal:**  
-   Investigue se há um aumento nas vendas de determinados produtos logo após o início de uma campanha de marketing.
-
-8. **Análise Regional:**  
-    Explore se determinadas cidades apresentam melhor resposta às campanhas de marketing e como isso se reflete nas vendas.
-
-### D. Agora é com você!
-
-Esta seção é fundamental e faz parte dos critérios de avaliação do teste. Esperamos que você:
-
-- **Proponha análises adicionais:**
-Vá além dos pontos solicitados nas seções A, B e C. Sugira outras análises que possam trazer insights valiosos para o negócio, como análises de performance por período, comportamento do cliente, análise de churn ou outras métricas relevantes.
-
-- **Entregue visualizações de dados:**
-Apresente suas análises de forma visual, criando gráficos, dashboards ou outras formas de visualização que facilitem a comunicação dos resultados para o stakeholder. Essas visualizações devem evidenciar os insights obtidos e tornar o relatório mais intuitivo e atrativo.
-
-
-## Abordagem e Ferramentas
-
-Você tem total liberdade para resolver o teste utilizando **SQL** ou **Python** (ou uma combinação de ambos). Algumas sugestões:
-- **SQL:** Utilize consultas diretas no banco de dados SQLite para extrair, agrupar e sumarizar os dados.
-- **Python:** Utilize bibliotecas como `sqlite3`, `pandas`, `matplotlib` ou `seaborn` para realizar a análise e visualizações dos dados.
-
-## Acesso ao Banco de Dados
-
-O arquivo do banco de dados (`vendas_marketing.db`) será fornecido juntamente com este teste. Você pode utilizar ferramentas de visualização ou scripts Python para conectar e consultar a base de dados.
-
-## Entrega e Considerações Finais
-
-- Documente todas as suas consultas, análises e insights obtidos.
-- Apresente um relatório e/ou uma apresentação com suas conclusões, incluindo as visualizações que facilitarão o entendimento dos resultados pelo stakeholder.
-- Lembre-se: análises que vão além dos pontos solicitados serão **bastante** valorizadas e podem render pontos adicionais.
-
-Ao finalizar o teste, envie um e-mail para [petro.cardoso@growthmachine.com.br](mailto:petro.cardoso@growthmachine.com.br?cc=leonardo.alexandre@growthmachine.com.br&subject=Teste%20T%C3%A9cnico%20-%20An%C3%A1lise%20de%20Dados%3A%20Vendas%20e%20Marketing) com cópia para [leonardo.alexandre@growthmachine.com.br](mailto:petro.cardoso@growthmachine.com.br?cc=leonardo.alexandre@growthmachine.com.br&subject=Teste%20T%C3%A9cnico%20-%20An%C3%A1lise%20de%20Dados%3A%20Vendas%20e%20Marketing) contendo o link do seu repositório no GitHub contendo a solução do teste.
-
-> Obs.: Caso você tenha alguma dúvida sobre o teste, entre em contato conosco pelos mesmos e-mails acima.
-
-Boa sorte e esperamos ver uma solução criativa, analítica e visualmente atraente!
+7.  **Gerar Relatório PDF**:
+    * Selecione a opção "📄 Gerar Relatório PDF" na barra lateral.
+    * Clique no botão "🎯 Gerar Relatório PDF".
+    * Faça o download do arquivo PDF gerado.
