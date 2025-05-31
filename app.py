@@ -164,12 +164,18 @@ def relacao_temporal(tables):
     vendas['data_venda'] = pd.to_datetime(vendas['data_venda'])
     campanhas['data_inicio'] = pd.to_datetime(campanhas['data_inicio'])
     vendas_produtos = vendas.merge(produtos, left_on='id_produto', right_on='id_produto')
-    vendas_mensais = vendas_produtos.groupby([vendas_produtos['data_venda'].dt.to_period('M'), 'nome_produto']).agg({
+    
+    # Convertendo para string no formato YYYY-MM
+    vendas_produtos['mes_ano'] = vendas_produtos['data_venda'].dt.strftime('%Y-%m')
+    
+    vendas_mensais = vendas_produtos.groupby(['mes_ano', 'nome_produto']).agg({
         'quantidade': 'sum'
     }).reset_index()
+    
     top_produtos = vendas_produtos.groupby('nome_produto')['quantidade'].sum().nlargest(3).index
     vendas_top = vendas_mensais[vendas_mensais['nome_produto'].isin(top_produtos)]
-    fig = px.line(vendas_top, x='data_venda', y='quantidade', color='nome_produto',
+    
+    fig = px.line(vendas_top, x='mes_ano', y='quantidade', color='nome_produto',
                   title='Vendas de Top Produtos ao Longo do Tempo')
     return fig, vendas_top
 
@@ -188,49 +194,129 @@ def analise_regional(tables):
                      title='Análise Regional: Vendas vs Interações de Marketing')
     return fig, regional
 
-def gerar_pdf_relatorio(analises_resultados):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Title'],
-        fontSize=24,
-        spaceAfter=30,
-        textColor=colors.HexColor('#1f77b4')
+def analise_churn(tables):
+    vendas = tables['vendas']
+    clientes = tables['clientes']
+    
+    # Convertendo datas
+    vendas['data_venda'] = pd.to_datetime(vendas['data_venda'])
+    
+    # Encontrando última compra de cada cliente
+    ultima_compra = vendas.groupby('id_cliente')['data_venda'].max().reset_index()
+    ultima_compra.columns = ['id_cliente', 'ultima_compra']
+    
+    # Data atual (última data de venda no dataset)
+    data_atual = vendas['data_venda'].max()
+    
+    # Calculando dias desde última compra
+    ultima_compra['dias_sem_comprar'] = (data_atual - ultima_compra['ultima_compra']).dt.days
+    
+    # Definindo clientes inativos (sem compras nos últimos 90 dias)
+    ultima_compra['status'] = ultima_compra['dias_sem_comprar'].apply(
+        lambda x: 'Ativo' if x <= 90 else 'Inativo'
     )
-    story.append(Paragraph("Relatório de Análise de Vendas e Marketing", title_style))
-    story.append(Spacer(1, 20))
-    story.append(Paragraph(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
-    story.append(Spacer(1, 30))
-    sections = [
-        ("A. ANÁLISE DE VENDAS", [
-            ("1. Vendas por Canal", "Análise do desempenho por canal de aquisição no último trimestre."),
-            ("2. Top Produtos", "Identificação dos 5 produtos com maior volume de vendas."),
-            ("3. Segmentação de Clientes", "Comparação do ticket médio entre B2B e B2C."),
-            ("4. Sazonalidade", "Padrão de vendas ao longo do ano.")
-        ]),
-        ("B. ANÁLISE DE MARKETING", [
-            ("5. Eficiência das Campanhas", "Taxa de conversão e ROI das campanhas."),
-            ("6. Canais de Marketing", "Engajamento por canal de marketing.")
-        ]),
-        ("C. ANÁLISE INTEGRADA", [
-            ("7. Relação Temporal", "Correlação entre campanhas e vendas."),
-            ("8. Análise Regional", "Performance regional das campanhas.")
-        ])
-    ]
-    for section_title, items in sections:
-        story.append(Paragraph(section_title, styles['Heading1']))
-        story.append(Spacer(1, 15))
-        for item_title, item_desc in items:
-            story.append(Paragraph(item_title, styles['Heading2']))
-            story.append(Paragraph(item_desc, styles['Normal']))
-            story.append(Spacer(1, 10))
-        story.append(PageBreak())
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+    
+    # Calculando métricas de churn
+    total_clientes = len(ultima_compra)
+    clientes_inativos = len(ultima_compra[ultima_compra['status'] == 'Inativo'])
+    taxa_churn = (clientes_inativos / total_clientes) * 100
+    
+    # Criando gráfico de distribuição de dias sem comprar
+    fig = px.histogram(ultima_compra, x='dias_sem_comprar',
+                      title='Distribuição de Dias sem Comprar',
+                      labels={'dias_sem_comprar': 'Dias desde última compra'},
+                      color='status',
+                      color_discrete_map={'Ativo': '#2ecc71', 'Inativo': '#e74c3c'})
+    
+    return fig, ultima_compra, taxa_churn
+
+def analise_retencao(tables):
+    vendas = tables['vendas']
+    clientes = tables['clientes']
+    
+    # Convertendo datas
+    vendas['data_venda'] = pd.to_datetime(vendas['data_venda'])
+    vendas['mes_ano'] = vendas['data_venda'].dt.strftime('%Y-%m')
+    
+    # Encontrando primeiro mês de compra de cada cliente
+    primeira_compra = vendas.groupby('id_cliente')['mes_ano'].min().reset_index()
+    primeira_compra.columns = ['id_cliente', 'primeiro_mes']
+    
+    # Calculando retenção mensal
+    meses_unicos = sorted(vendas['mes_ano'].unique())
+    retencao = []
+    
+    for mes in meses_unicos:
+        clientes_mes = vendas[vendas['mes_ano'] == mes]['id_cliente'].unique()
+        novos_clientes = primeira_compra[primeira_compra['primeiro_mes'] == mes]['id_cliente'].unique()
+        clientes_retidos = len(set(clientes_mes) - set(novos_clientes))
+        total_clientes_anterior = len(primeira_compra[primeira_compra['primeiro_mes'] < mes])
+        
+        if total_clientes_anterior > 0:
+            taxa_retencao = (clientes_retidos / total_clientes_anterior) * 100
+        else:
+            taxa_retencao = 0
+            
+        retencao.append({
+            'mes': mes,
+            'taxa_retencao': taxa_retencao,
+            'novos_clientes': len(novos_clientes),
+            'clientes_retidos': clientes_retidos
+        })
+    
+    df_retencao = pd.DataFrame(retencao)
+    
+    # Criando gráfico de retenção
+    fig = px.line(df_retencao, x='mes', y='taxa_retencao',
+                  title='Taxa de Retenção Mensal',
+                  labels={'taxa_retencao': 'Taxa de Retenção (%)', 'mes': 'Mês'})
+    
+    return fig, df_retencao
+
+def classificacao_clientes(tables):
+    vendas = tables['vendas']
+    clientes = tables['clientes']
+    
+    # Calculando métricas por cliente
+    metricas_clientes = vendas.groupby('id_cliente').agg({
+        'valor_total': ['sum', 'mean', 'count'],
+        'data_venda': ['min', 'max']
+    }).reset_index()
+    
+    metricas_clientes.columns = ['id_cliente', 'valor_total', 'ticket_medio', 'frequencia', 'primeira_compra', 'ultima_compra']
+    
+    # Calculando RFM
+    data_atual = vendas['data_venda'].max()
+    metricas_clientes['recencia'] = (data_atual - metricas_clientes['ultima_compra']).dt.days
+    
+    # Classificando clientes
+    def classificar_cliente(row):
+        if row['valor_total'] > metricas_clientes['valor_total'].quantile(0.75) and \
+           row['frequencia'] > metricas_clientes['frequencia'].quantile(0.75) and \
+           row['recencia'] < metricas_clientes['recencia'].quantile(0.25):
+            return 'Alto Valor'
+        elif row['valor_total'] > metricas_clientes['valor_total'].quantile(0.5) and \
+             row['frequencia'] > metricas_clientes['frequencia'].quantile(0.5):
+            return 'Valor Médio'
+        elif row['recencia'] > metricas_clientes['recencia'].quantile(0.75):
+            return 'Em Risco'
+        else:
+            return 'Baixo Valor'
+    
+    metricas_clientes['segmento'] = metricas_clientes.apply(classificar_cliente, axis=1)
+    
+    # Criando gráfico de distribuição de segmentos
+    fig = px.pie(metricas_clientes, names='segmento',
+                 title='Distribuição de Clientes por Segmento',
+                 color='segmento',
+                 color_discrete_map={
+                     'Alto Valor': '#2ecc71',
+                     'Valor Médio': '#3498db',
+                     'Em Risco': '#e74c3c',
+                     'Baixo Valor': '#95a5a6'
+                 })
+    
+    return fig, metricas_clientes
 
 def main():
     st.markdown('<h1 class="main-header">📊 Análise de Vendas e Marketing</h1>', unsafe_allow_html=True)
@@ -256,10 +342,10 @@ def main():
                 "💰 A. Análise de Vendas",
                 "📈 B. Análise de Marketing", 
                 "🔄 C. Análise Integrada",
-                "🎯 D. Análises Adicionais",
-                "📄 Gerar Relatório PDF"
+                "🎯 D. Análises Adicionais"
             ]
             selected_section = st.sidebar.selectbox("Selecione uma seção:", menu_options)
+            
             if selected_section == "📋 Visão Geral":
                 st.markdown('<h2 class="section-header">Visão Geral dos Dados</h2>', unsafe_allow_html=True)
                 col1, col2, col3, col4 = st.columns(4)
@@ -284,8 +370,24 @@ def main():
                     st.dataframe(tables['vendas'].head(), use_container_width=True)
                 with tab5:
                     st.dataframe(tables['interacoes'].head(), use_container_width=True)
+            
             elif selected_section == "💰 A. Análise de Vendas":
                 st.markdown('<h2 class="section-header">A. Análise de Vendas</h2>', unsafe_allow_html=True)
+                st.markdown("""
+                ### 📊 Visão Geral da Seção
+                Esta seção apresenta uma análise abrangente das vendas, permitindo entender:
+                - Desempenho por canal de aquisição
+                - Produtos mais vendidos e suas margens
+                - Segmentação de clientes e ticket médio
+                - Padrões sazonais de vendas
+                
+                #### 💡 Principais Insights
+                - Identificação dos canais mais eficientes
+                - Produtos com melhor desempenho
+                - Comportamento de compra por segmento
+                - Períodos de maior e menor volume de vendas
+                """)
+                
                 st.markdown("### 1. Total de Vendas por Canal")
                 fig1, data1 = analise_vendas_por_canal(tables)
                 st.plotly_chart(fig1, use_container_width=True)
@@ -295,89 +397,182 @@ def main():
                 with col2:
                     st.markdown('<div class="insight-box"><h4>💡 Insights</h4><p>Análise do desempenho dos canais de aquisição no último trimestre.</p></div>', unsafe_allow_html=True)
                 st.divider()
+                
                 st.markdown("### 2. Top 5 Produtos")
                 fig2, data2 = top_produtos_analise(tables)
                 st.plotly_chart(fig2, use_container_width=True)
                 st.dataframe(data2, use_container_width=True)
                 st.divider()
+                
                 st.markdown("### 3. Segmentação de Clientes")
                 fig3, data3 = segmentacao_clientes(tables)
                 st.plotly_chart(fig3, use_container_width=True)
                 st.dataframe(data3, use_container_width=True)
                 st.divider()
+                
                 st.markdown("### 4. Análise de Sazonalidade")
                 fig4, data4 = analise_sazonalidade(tables)
                 st.plotly_chart(fig4, use_container_width=True)
                 st.dataframe(data4, use_container_width=True)
+            
             elif selected_section == "📈 B. Análise de Marketing":
                 st.markdown('<h2 class="section-header">B. Análise de Marketing</h2>', unsafe_allow_html=True)
+                st.markdown("""
+                ### 📊 Visão Geral da Seção
+                Esta seção avalia a eficácia das campanhas de marketing, incluindo:
+                - Taxa de conversão por campanha
+                - ROI das campanhas
+                - Engajamento por canal
+                - Eficiência do orçamento
+                
+                #### 💡 Principais Insights
+                - Campanhas com melhor desempenho
+                - Canais mais engajados
+                - Relação entre investimento e resultados
+                - Oportunidades de otimização
+                """)
+                
                 st.markdown("### 5. Eficiência das Campanhas")
                 fig5, data5 = eficiencia_campanhas(tables)
                 st.plotly_chart(fig5, use_container_width=True)
                 st.dataframe(data5[['nome_campanha', 'canal_marketing', 'orcamento', 'taxa_conversao', 'conversoes']], use_container_width=True)
                 st.divider()
+                
                 st.markdown("### 6. Análise de Canais de Marketing")
                 fig6, data6 = analise_canais_marketing(tables)
                 st.plotly_chart(fig6, use_container_width=True)
                 st.dataframe(data6, use_container_width=True)
+            
             elif selected_section == "🔄 C. Análise Integrada":
                 st.markdown('<h2 class="section-header">C. Análise Integrada</h2>', unsafe_allow_html=True)
+                st.markdown("""
+                ### 📊 Visão Geral da Seção
+                Esta seção integra dados de vendas e marketing para:
+                - Correlação entre campanhas e vendas
+                - Impacto regional das campanhas
+                - Eficácia por segmento de cliente
+                - Oportunidades de otimização
+                
+                #### 💡 Principais Insights
+                - Relação entre investimento e resultados
+                - Eficácia por região
+                - Segmentos mais responsivos
+                - Oportunidades de crescimento
+                """)
+                
                 st.markdown("### 7. Relação Temporal")
                 fig7, data7 = relacao_temporal(tables)
                 st.plotly_chart(fig7, use_container_width=True)
                 st.divider()
+                
                 st.markdown("### 8. Análise Regional")
                 fig8, data8 = analise_regional(tables)
                 st.plotly_chart(fig8, use_container_width=True)
                 st.dataframe(data8, use_container_width=True)
+            
             elif selected_section == "🎯 D. Análises Adicionais":
                 st.markdown('<h2 class="section-header">D. Análises Adicionais</h2>', unsafe_allow_html=True)
-                st.markdown("### 🔍 Consulta SQL Personalizada")
-                query = st.text_area(
-                    "Digite sua consulta SQL:",
-                    height=150,
-                    placeholder="SELECT * FROM Vendas LIMIT 10"
-                )
-                if st.button("Executar Consulta"):
-                    if query.strip():
-                        result = execute_query("temp_database.db", query)
-                        if result is not None:
-                            st.dataframe(result, use_container_width=True)
-                            if len(result.columns) >= 2:
-                                st.markdown("### 📊 Visualização dos Resultados")
-                                col_x = st.selectbox("Eixo X:", result.columns)
-                                col_y = st.selectbox("Eixo Y:", [col for col in result.columns if col != col_x])
-                                chart_type = st.selectbox("Tipo de Gráfico:", ["Bar", "Line", "Scatter"])
-                                if st.button("Gerar Gráfico"):
-                                    if chart_type == "Bar":
-                                        fig = px.bar(result, x=col_x, y=col_y)
-                                    elif chart_type == "Line":
-                                        fig = px.line(result, x=col_x, y=col_y)
-                                    else:
-                                        fig = px.scatter(result, x=col_x, y=col_y)
-                                    st.plotly_chart(fig, use_container_width=True)
-            elif selected_section == "📄 Gerar Relatório PDF":
-                st.markdown('<h2 class="section-header">Gerar Relatório PDF</h2>', unsafe_allow_html=True)
                 st.markdown("""
-                ### 📋 Conteúdo do Relatório
+                ### 📊 Visão Geral da Seção
+                Esta seção apresenta análises avançadas focadas em:
+                - Taxa de churn e retenção
+                - Segmentação RFM
+                - Comportamento de compra
+                - Oportunidades de crescimento
                 
-                O relatório em PDF incluirá:
-                - **Seção A**: Análise completa de vendas
-                - **Seção B**: Análise de marketing e campanhas
-                - **Seção C**: Análise integrada vendas-marketing
-                - **Insights e Recomendações**: Principais descobertas
+                #### 💡 Principais Insights
+                - Identificação de clientes em risco
+                - Padrões de retenção
+                - Segmentação comportamental
+                - Estratégias de fidelização
                 """)
-                if st.button("🎯 Gerar Relatório PDF", type="primary"):
-                    with st.spinner("Gerando relatório..."):
-                        resultados = {}
-                        pdf_buffer = gerar_pdf_relatorio(resultados)
-                        st.download_button(
-                            label="📥 Download Relatório PDF",
-                            data=pdf_buffer,
-                            file_name=f"relatorio_vendas_marketing_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                            mime="application/pdf"
-                        )
-                        st.success("✅ Relatório gerado com sucesso!")
+                
+                # Adicionando abas para diferentes análises
+                tab1, tab2, tab3, tab4 = st.tabs([
+                    "📊 Análise de Churn",
+                    "📈 Retenção de Clientes",
+                    "👥 Classificação de Clientes",
+                    "🔍 Consulta SQL Personalizada"
+                ])
+                
+                with tab1:
+                    st.markdown("### 📊 Análise de Churn")
+                    fig_churn, df_churn, taxa_churn = analise_churn(tables)
+                    st.plotly_chart(fig_churn, use_container_width=True)
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Taxa de Churn", f"{taxa_churn:.1f}%")
+                    with col2:
+                        st.metric("Clientes Ativos", 
+                                len(df_churn[df_churn['status'] == 'Ativo']))
+                    
+                    st.markdown("""
+                    #### 💡 Insights sobre Churn
+                    - **Definição**: Clientes considerados inativos após 90 dias sem compras
+                    - **Ações Recomendadas**:
+                        - Implementar programa de fidelidade
+                        - Criar campanhas de reativação
+                        - Analisar padrões de compra dos clientes ativos
+                    """)
+                
+                with tab2:
+                    st.markdown("### 📈 Análise de Retenção")
+                    fig_retencao, df_retencao = analise_retencao(tables)
+                    st.plotly_chart(fig_retencao, use_container_width=True)
+                    
+                    st.markdown("""
+                    #### 💡 Insights sobre Retenção
+                    - **Métrica**: Taxa de clientes que retornam mês a mês
+                    - **Ações Recomendadas**:
+                        - Identificar períodos de maior retenção
+                        - Replicar estratégias bem-sucedidas
+                        - Desenvolver programas de fidelização
+                    """)
+                
+                with tab3:
+                    st.markdown("### 👥 Classificação de Clientes")
+                    fig_class, df_class = classificacao_clientes(tables)
+                    st.plotly_chart(fig_class, use_container_width=True)
+                    
+                    st.markdown("""
+                    #### 💡 Insights sobre Classificação
+                    - **Segmentos**:
+                        - **Alto Valor**: Maior frequência e valor de compras
+                        - **Valor Médio**: Bom histórico de compras
+                        - **Em Risco**: Baixa atividade recente
+                        - **Baixo Valor**: Menor engajamento
+                    - **Ações Recomendadas**:
+                        - Personalizar comunicação por segmento
+                        - Desenvolver programas específicos
+                        - Identificar oportunidades de upsell
+                    """)
+                
+                with tab4:
+                    st.markdown("### 🔍 Consulta SQL Personalizada")
+                    query = st.text_area(
+                        "Digite sua consulta SQL:",
+                        height=150,
+                        placeholder="SELECT * FROM Vendas LIMIT 10"
+                    )
+                    if st.button("Executar Consulta"):
+                        if query.strip():
+                            result = execute_query("temp_database.db", query)
+                            if result is not None:
+                                st.dataframe(result, use_container_width=True)
+                                if len(result.columns) >= 2:
+                                    st.markdown("### 📊 Visualização dos Resultados")
+                                    col_x = st.selectbox("Eixo X:", result.columns)
+                                    col_y = st.selectbox("Eixo Y:", [col for col in result.columns if col != col_x])
+                                    chart_type = st.selectbox("Tipo de Gráfico:", ["Bar", "Line", "Scatter"])
+                                    if st.button("Gerar Gráfico"):
+                                        if chart_type == "Bar":
+                                            fig = px.bar(result, x=col_x, y=col_y)
+                                        elif chart_type == "Line":
+                                            fig = px.line(result, x=col_x, y=col_y)
+                                        else:
+                                            fig = px.scatter(result, x=col_x, y=col_y)
+                                        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("👆 Faça upload do arquivo vendas_marketing.db na barra lateral para começar a análise.")
         st.markdown("""
